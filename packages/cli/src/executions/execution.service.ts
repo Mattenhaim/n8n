@@ -227,7 +227,7 @@ export class ExecutionService {
 
 		const execution = this.workflowVersionedSettings.isEnabled()
 			? await this.lastSuccessfulExecutionOnEitherEngine(workflowId)
-			: await this.lastSuccessfulExecutionOnWorkflowEngine(workflowId);
+			: await this.lastSuccessfulExecutionOnEngineV1(workflowId);
 		if (!execution) return undefined;
 
 		await this.executionRedactionServiceProxy.processExecution(execution, {
@@ -235,16 +235,6 @@ export class ExecutionService {
 			redactExecutionData,
 		});
 		return execution;
-	}
-
-	/** A workflow runs on one engine, and only that engine holds its executions. */
-	private async lastSuccessfulExecutionOnWorkflowEngine(
-		workflowId: string,
-	): Promise<IExecutionResponse | undefined> {
-		const settings = await this.workflowRepository.findSettings(workflowId);
-		return settings?.engineType === 'v2'
-			? await this.engineV2ExecutionReader.findLatest({ status: ['success'] }, [workflowId])
-			: await this.lastSuccessfulV1Execution(workflowId);
 	}
 
 	/**
@@ -255,7 +245,7 @@ export class ExecutionService {
 		workflowId: string,
 	): Promise<IExecutionResponse | undefined> {
 		const [v1Execution, v2Execution] = await Promise.all([
-			this.lastSuccessfulV1Execution(workflowId),
+			this.lastSuccessfulExecutionOnEngineV1(workflowId),
 			this.engineV2ExecutionReader.findLatest({ status: ['success'] }, [workflowId]),
 		]);
 		if (!v1Execution || !v2Execution) return v1Execution ?? v2Execution;
@@ -267,7 +257,7 @@ export class ExecutionService {
 			: v1Execution;
 	}
 
-	private async lastSuccessfulV1Execution(
+	private async lastSuccessfulExecutionOnEngineV1(
 		workflowId: string,
 	): Promise<IExecutionResponse | undefined> {
 		const executions = await this.executionPersistence.findMultipleExecutions(
