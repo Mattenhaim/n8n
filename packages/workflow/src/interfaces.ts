@@ -3099,6 +3099,7 @@ export interface DeclarativeWebhookHandshake {
 		body?: string;
 		/** Default 200. */
 		statusCode?: number;
+		/** Default `text/plain` for a string body, unless `headers` sets a Content-Type. */
 		contentType?: string;
 		headers?: Record<string, string>;
 	};

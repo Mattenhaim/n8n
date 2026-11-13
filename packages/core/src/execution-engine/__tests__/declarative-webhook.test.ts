@@ -977,7 +977,7 @@ describe('createDeclarativeWebhook', () => {
 					headers: { 'X-Missing': '={{ $webhookRequest.body.missing }}', 'X-Count': '={{ 2 }}' },
 				});
 
-				expect(res.setHeader).toHaveBeenCalledTimes(1);
+				expect(res.setHeader).not.toHaveBeenCalledWith('X-Missing', expect.anything());
 				expect(res.setHeader).toHaveBeenCalledWith('X-Count', '2');
 			});
 
@@ -994,7 +994,27 @@ describe('createDeclarativeWebhook', () => {
 				);
 
 				expect(await run()).toStrictEqual({ webhookResponse: 'OK' });
-				expect(res.setHeader).not.toHaveBeenCalled();
+				expect(res.setHeader).not.toHaveBeenCalledWith('X-Challenge', expect.anything());
+			});
+
+			test.each([200, 202])('a string reply is plain text with status %s', async (statusCode) => {
+				await handshakeWith({ statusCode, body: '={{ $webhookRequest.body.challenge }}' });
+
+				expect(res.setHeader).toHaveBeenCalledWith('content-type', 'text/plain');
+			});
+
+			test('a reply that is not a string sets no content type', async () => {
+				await handshakeWith({ body: '={{ { challenge: $webhookRequest.body.challenge } }}' });
+
+				expect(res.setHeader).not.toHaveBeenCalledWith('content-type', expect.anything());
+			});
+
+			test('a string reply keeps a Content-Type from headers', async () => {
+				res.getHeader.mockReturnValue('application/json');
+
+				await handshakeWith({ headers: { 'Content-Type': 'application/json' } });
+
+				expect(res.setHeader).not.toHaveBeenCalledWith('content-type', 'text/plain');
 			});
 		});
 

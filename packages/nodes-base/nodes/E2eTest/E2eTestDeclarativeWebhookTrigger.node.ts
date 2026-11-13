@@ -79,7 +79,6 @@ export class E2eTestDeclarativeWebhookTrigger implements INodeType {
 					when: '={{ $webhookRequest.headers["x-hook-secret"] !== undefined }}',
 					respond: {
 						body: '={{ $webhookRequest.headers["x-hook-secret"] }}',
-						contentType: 'text/plain',
 						headers: { 'X-Hook-Secret': '={{ $webhookRequest.headers["x-hook-secret"] }}' },
 					},
 				},

@@ -332,10 +332,14 @@ function respondToHandshake(
 		}
 		res.setHeader(name, text);
 	}
-	if (contentType) res.setHeader('content-type', contentType);
 	const resolved = body === undefined ? 'OK' : resolve(context, body, extraKeys);
 	// With `undefined`, the server would send its default message.
 	const value = resolved === undefined ? '' : resolved;
+	// A string reply would go out as HTML. Send it as plain text, as the hand-written triggers do.
+	const type =
+		contentType ??
+		(typeof value === 'string' && !res.getHeader('content-type') ? 'text/plain' : undefined);
+	if (type) res.setHeader('content-type', type);
 	if (statusCode === 200) return { webhookResponse: value };
 
 	// The server sets the status of the route, so another status needs a direct reply.
