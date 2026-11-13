@@ -1,3 +1,4 @@
+import { isRecord } from '@n8n/utils/is-record';
 import get from 'lodash/get';
 import type {
 	DeclarativeSecretGenerator,
@@ -349,6 +350,8 @@ export function createDeclarativeWebhook(trigger: IDeclarativeWebhookTrigger) {
 			// The spread keeps binary data that a postReceive action attached.
 			items = items.map((item) => ({ ...item, json: { body: item.json, headers, query } }));
 		}
+		// An item must hold an object. A text body or a missing `rootProperty` gives other values.
+		items = items.filter((item) => isRecord(item.json));
 		// An empty result starts no workflow, the same as a filter miss.
 		if (items.length === 0) return {};
 		return { workflowData: [items] };

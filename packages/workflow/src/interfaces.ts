@@ -3099,7 +3099,7 @@ export interface DeclarativeWebhookHandler {
 	output?: {
 		/** Routing `postReceive` actions. `$response.body` is the request body. */
 		postReceive?: PostReceiveAction[];
-		/** Emit each item as `{ body, headers, query }`. */
+		/** Emit each item as `{ body, headers, query }`. Use it for a body that is not a JSON object, because an item that is not an object is dropped. */
 		includeMeta?: boolean;
 	};
 }

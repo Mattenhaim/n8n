@@ -736,6 +736,30 @@ describe('createDeclarativeWebhook', () => {
 		expect(await webhookSetup(undefined, [])()).toStrictEqual({});
 	});
 
+	test('drops items that are not objects', async () => {
+		expect(await webhookSetup(undefined, 'text')()).toStrictEqual({});
+		expect(await webhookSetup(undefined, [1, 'a', [2], { n: 1 }])()).toStrictEqual({
+			workflowData: [[{ json: { n: 1 } }]],
+		});
+	});
+
+	test('starts no workflow when rootProperty finds nothing', async () => {
+		const run = webhookSetup(
+			{ output: { postReceive: [{ type: 'rootProperty', properties: { property: 'data' } }] } },
+			{ event: 'created' },
+		);
+
+		expect(await run()).toStrictEqual({});
+	});
+
+	test('includeMeta emits a text body', async () => {
+		const run = webhookSetup({ output: { includeMeta: true } }, 'text');
+
+		expect(await run()).toStrictEqual({
+			workflowData: [[{ json: { body: 'text', headers: {}, query: {} } }]],
+		});
+	});
+
 	test('needs a WebhookContext', async () => {
 		await expect(
 			createDeclarativeWebhook(registryTrigger).call(mock<IWebhookFunctions>()),
