@@ -2,7 +2,6 @@ import { timingSafeEqual } from 'crypto';
 
 /**
  * Maximum allowed age for a webhook request timestamp (5 minutes).
- * Requests older than this are considered potential replay attacks.
  */
 const MAX_TIMESTAMP_AGE_SECONDS = 300;
 
@@ -24,7 +23,7 @@ export interface VerifySignatureOptions {
 	getActualSignature: () => string | null;
 	/**
 	 * Optional. Returns timestamp from request (seconds or milliseconds, auto-converted).
-	 * Enables replay attack prevention (default: 5 minute window).
+	 * Enables the timestamp check (default: 5 minute window).
 	 */
 	getTimestamp?: () => number | string | null;
 	/**
@@ -40,11 +39,11 @@ export interface VerifySignatureOptions {
 }
 
 /**
- * Verifies webhook signatures and prevents replay attacks.
+ * Verifies webhook signatures and, optionally, request timestamps.
  *
  * Features:
- * - Signature verification using constant-time comparison (prevents timing attacks)
- * - Optional timestamp validation (prevents replay attacks)
+ * - Signature comparison in constant time
+ * - Optional timestamp validation
  * - Supports HMAC-based and simple secret comparison patterns
  *
  * @param options - Configuration options
@@ -65,7 +64,7 @@ export function verifySignature(options: VerifySignatureOptions): boolean {
 	const { getExpectedSignature, getActualSignature, getTimestamp, maxTimestampAgeSeconds } =
 		options;
 	try {
-		// Validate timestamp if provided (replay attack prevention)
+		// Validate timestamp if provided
 		if (getTimestamp) {
 			const timestamp = getTimestamp();
 			const shouldSkip = options.skipIfNoTimestamp && timestamp === null;
@@ -91,7 +90,7 @@ export function verifySignature(options: VerifySignatureOptions): boolean {
 		const expectedBuffer = Buffer.from(expectedSignature);
 		const actualBuffer = Buffer.from(actualSignature);
 
-		// Perform constant-time comparison to prevent timing attacks
+		// Compare in constant time
 		return (
 			expectedBuffer.length === actualBuffer.length && timingSafeEqual(expectedBuffer, actualBuffer)
 		);

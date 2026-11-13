@@ -259,8 +259,13 @@ export class RoutingNode {
 					$version: node.typeVersion,
 				};
 				const { baseURL, url } = itemContext[itemIndex].requestData.options;
+				// The extra keys hold stored or received data, so a `baseURL` built from them is not node-owned.
+				const clearedExtraKeys = Object.fromEntries(
+					Object.keys(this.extraAdditionalKeys).map((key) => [key, {}]),
+				);
 				const ownHost = toHostname(
 					this.resolveBaseUrl(itemIndex, runIndex, executeData, itemContext[itemIndex].thisArgs, {
+						...clearedExtraKeys,
 						...baseUrlOwnershipKeys,
 						$parameter: {},
 						$rawParameter: {},
