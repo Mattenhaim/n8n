@@ -18,7 +18,10 @@ import { RoutingNode } from './routing-node';
  * against one empty item.
  */
 export async function runStandaloneRouting(
-	context: Pick<NodeExecutionContext, 'workflow' | 'node' | 'additionalData' | 'mode'>,
+	context: Pick<
+		NodeExecutionContext,
+		'workflow' | 'node' | 'additionalData' | 'mode' | 'getExecutionContext'
+	>,
 	nodeType: INodeType,
 	routing: INodePropertyRouting,
 	extraKeys: IWorkflowDataProxyAdditionalKeys = {},
@@ -30,7 +33,8 @@ export async function runStandaloneRouting(
 		node,
 		additionalData,
 		mode,
-		createRunExecutionData(),
+		// Keep the caller's context. Loading a credential writes it to the shared `additionalData`.
+		createRunExecutionData({ executionData: { runtimeData: context.getExecutionContext() } }),
 		0,
 		[],
 		{ main: [[{ json: {} }]] },

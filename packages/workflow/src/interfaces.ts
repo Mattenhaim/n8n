@@ -3032,7 +3032,7 @@ export type DeclarativeHookMethod = (this: IHookFunctions) => Promise<boolean>;
 export interface DeclarativeWebhookCheckExists {
 	/** The request. Expressions can use `$webhookUrl` and `$staticData`. */
 	routing: INodePropertyRouting;
-	/** The webhook exists if one returned item matches all clauses. Replaces the ID check. */
+	/** The webhook exists if one returned item matches all clauses. Replaces the ID check. Compares single values with `===`, not arrays or objects. */
 	matchOn?: Array<{ itemProperty: string; value: string }>;
 	/** Static data to write from the matched item. Expressions can use `$hook`. */
 	store?: Record<string, string>;
@@ -3069,7 +3069,7 @@ export interface DeclarativeWebhookDelete {
 /** A random value that a declarative webhook trigger makes before it registers. */
 export interface DeclarativeSecretGenerator {
 	type: 'hex' | 'base64' | 'uuid' | 'alphanumericLower';
-	/** Bytes, or characters for `alphanumericLower`. Minimum 1. Default 32 (10 for `alphanumericLower`). */
+	/** Bytes, or characters for `alphanumericLower`. A whole number of 1 or more. Default 32 (10 for `alphanumericLower`). */
 	length?: number;
 	prefix?: string;
 }
@@ -3090,16 +3090,16 @@ export interface IDeclarativeWebhookTrigger {
 	handler?: DeclarativeWebhookHandler;
 }
 
-/** A vendor request that confirms the endpoint. It starts no workflow. */
+/** A vendor request that confirms the endpoint. It starts no workflow. Expressions can use `$webhookRequest`, but not `$staticData`. */
 export interface DeclarativeWebhookHandshake {
 	/** On `default`, a truthy result makes the request a handshake. On `setup`, a falsy result replies 401. */
 	when?: string;
-	/** `$staticData` is not available here. */
 	respond?: {
 		/** Default `OK`. */
 		body?: string;
 		/** Default 200. */
 		statusCode?: number;
+		/** Default `text/plain` for a string body, unless `headers` sets a Content-Type. */
 		contentType?: string;
 		headers?: Record<string, string>;
 	};
@@ -3121,7 +3121,7 @@ export interface DeclarativeWebhookVerification {
 	encoding?: 'hex' | 'base64';
 	/** The signed text. `{body}` is the raw request body, the other parts can be expressions. Default `{body}`. */
 	signedPayload?: string;
-	/** The header with a Unix timestamp in seconds or milliseconds. A missing or old value fails the check. It prevents replay only if `signedPayload` contains the timestamp. */
+	/** The header with a Unix timestamp in seconds or milliseconds. A missing or old value fails the check. Put the timestamp in `signedPayload`, or the signature does not cover it. */
 	timestampHeader?: string;
 	/** The maximum difference to the current time, in the past or the future. Default 300. */
 	maxTimestampAgeSeconds?: number;
@@ -3142,7 +3142,7 @@ export interface DeclarativeWebhookHandler {
 	output?: {
 		/** Routing `postReceive` actions. `$response.body` is the request body. */
 		postReceive?: PostReceiveAction[];
-		/** Emit each item as `{ body, headers, query }`. */
+		/** Emit each item as `{ body, headers, query }`. Use it for a body that is not a JSON object, because an item that is not an object is dropped. */
 		includeMeta?: boolean;
 	};
 }
