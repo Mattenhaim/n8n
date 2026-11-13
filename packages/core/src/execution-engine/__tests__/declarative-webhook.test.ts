@@ -439,19 +439,19 @@ describe('createDeclarativeWebhookMethods', () => {
 			expect(await create()).toBe(true);
 		});
 
-		test('rejects a generate length below 1 without a request', async () => {
+		test.each([0, 1.5])('rejects a generate length of %s without a request', async (length) => {
 			const trigger: IDeclarativeWebhookTrigger = {
 				type: 'webhook',
 				lifecycle: {
 					create: {
 						routing: { request: { method: 'POST', url: '/hooks' } },
-						generate: { secret: { type: 'hex', length: 0 } },
+						generate: { secret: { type: 'hex', length } },
 					},
 				},
 			};
 			const { create } = setup(trigger);
 
-			await expect(create()).rejects.toThrow('must be 1 or more');
+			await expect(create()).rejects.toThrow('must be a whole number of 1 or more');
 			expect(httpRequest).not.toHaveBeenCalled();
 		});
 
@@ -632,6 +632,37 @@ describe('createDeclarativeWebhookMethods', () => {
 			expect(httpRequest).not.toHaveBeenCalled();
 		});
 
+		test('an omitted checkExists calls a function delete before it registers again', async () => {
+			const del = vi.fn(async () => true);
+			const trigger: IDeclarativeWebhookTrigger = {
+				type: 'webhook',
+				lifecycle: { create: registryTrigger.lifecycle.create, delete: del },
+			};
+			const { checkExists } = setup(trigger);
+
+			expect(await checkExists()).toBe(false);
+			expect(del).toHaveBeenCalledTimes(1);
+		});
+
+		test('a failed registration calls a function delete', async () => {
+			const del = vi.fn(async () => true);
+			const trigger: IDeclarativeWebhookTrigger = {
+				type: 'webhook',
+				lifecycle: {
+					create: {
+						routing: { request: { method: 'POST', url: '/hooks' } },
+						store: { webhookId: '={{ $response.id }}' },
+					},
+					delete: del,
+				},
+			};
+			const { create } = setup(trigger);
+			respond({});
+
+			await expect(create()).rejects.toThrow('does not contain the expected data');
+			expect(del).toHaveBeenCalledTimes(1);
+		});
+
 		test('uses a function method as it is', async () => {
 			const own = vi.fn(async () => true);
 			const trigger: IDeclarativeWebhookTrigger = {
@@ -723,6 +754,30 @@ describe('createDeclarativeWebhook', () => {
 
 	test('starts no workflow for an empty array body', async () => {
 		expect(await webhookSetup(undefined, [])()).toStrictEqual({});
+	});
+
+	test('drops items that are not objects', async () => {
+		expect(await webhookSetup(undefined, 'text')()).toStrictEqual({});
+		expect(await webhookSetup(undefined, [1, 'a', [2], { n: 1 }])()).toStrictEqual({
+			workflowData: [[{ json: { n: 1 } }]],
+		});
+	});
+
+	test('starts no workflow when rootProperty finds nothing', async () => {
+		const run = webhookSetup(
+			{ output: { postReceive: [{ type: 'rootProperty', properties: { property: 'data' } }] } },
+			{ event: 'created' },
+		);
+
+		expect(await run()).toStrictEqual({});
+	});
+
+	test('includeMeta emits a text body', async () => {
+		const run = webhookSetup({ output: { includeMeta: true } }, 'text');
+
+		expect(await run()).toStrictEqual({
+			workflowData: [[{ json: { body: 'text', headers: {}, query: {} } }]],
+		});
 	});
 
 	test('needs a WebhookContext', async () => {
