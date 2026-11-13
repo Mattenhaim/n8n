@@ -1,5 +1,6 @@
 import type {
 	ICredentialsHelper,
+	IExecutionContext,
 	IDataObject,
 	IDeclarativePollingTrigger,
 	IExecuteSingleFunctions,
@@ -95,9 +96,10 @@ function setup(
 		mode,
 		'init',
 	);
+	const warn = vi.spyOn(context.logger, 'warn');
 	const poll = createDeclarativePoll(nodeType, trigger);
 	const staticData = () => workflow.getStaticData('node', node);
-	return { run: async () => await poll.call(context), staticData };
+	return { run: async () => await poll.call(context), staticData, warn };
 }
 
 const respond = (items: IDataObject[]) =>
@@ -152,6 +154,55 @@ describe('createDeclarativePoll', () => {
 			}
 		},
 	);
+
+	test('loads credentials with the execution context of the poll', async () => {
+		const nodeType = makeNodeType(idTrigger);
+		nodeType.description.credentials = [{ name: 'testApi', required: true }];
+		const node: INode = {
+			id: 'n1',
+			name: 'Poll',
+			type: 'testPoll',
+			typeVersion: 1,
+			position: [0, 0],
+			parameters: {},
+			credentials: { testApi: { id: 'c1', name: 'Test' } },
+		};
+		const workflow = new Workflow({
+			id: 'w1',
+			nodes: [node],
+			connections: {},
+			active: true,
+			nodeTypes: mock<INodeTypes>({ getByNameAndVersion: () => nodeType }),
+		});
+		const executionContext: IExecutionContext = {
+			version: 1,
+			establishedAt: 1,
+			source: 'manual',
+			credentials: 'sealed-credential-context',
+		};
+		const contextsAtLoad: unknown[] = [];
+		const credentialsHelper = mock<ICredentialsHelper>();
+		credentialsHelper.getDecrypted.mockImplementation(async (additionalData) => {
+			contextsAtLoad.push(additionalData.executionContext);
+			return { apiKey: 'k' };
+		});
+		credentialsHelper.isCredentialUsableByNode.mockReturnValue(true);
+		const additionalData = mock<IWorkflowExecuteAdditionalData>({
+			executionId: 'e1',
+			webhookWaitingBaseUrl: 'http://localhost:5678/webhook-waiting',
+			formWaitingBaseUrl: 'http://localhost:5678/form-waiting',
+			credentialsHelper,
+		});
+		additionalData.executionContext = executionContext;
+		const context = new PollContext(workflow, node, additionalData, 'manual', 'init');
+		respond([{ id: 1 }]);
+
+		await createDeclarativePoll(nodeType, idTrigger).call(context);
+
+		expect(contextsAtLoad.length).toBeGreaterThan(0);
+		for (const contextAtLoad of contextsAtLoad) expect(contextAtLoad).toBe(executionContext);
+		expect(additionalData.executionContext).toBe(executionContext);
+	});
 
 	test('id cursor: first run seeds and emits nothing, later runs emit only newer items', async () => {
 		const { run, staticData } = setup(idTrigger);
@@ -245,13 +296,36 @@ describe('createDeclarativePoll', () => {
 		expect(staticData()[DECLARATIVE_CURSOR_KEY]).toEqual({ value: '2999-01-01T00:00:00Z' });
 	});
 
-	test('timestamp cursor: a non-date field fails loudly instead of never emitting', async () => {
+	test('timestamp cursor: a value that is not text fails the poll', async () => {
 		const { run } = setup({ ...idTrigger, cursor: { type: 'timestamp', field: 'at' } });
 
 		expect(await run()).toBeNull(); // seeds with an ISO "now"
 
 		respond([{ at: 1757238000 }]);
-		await expect(run()).rejects.toThrow(/non-date value from "at"/);
+		await expect(run()).rejects.toThrow(
+			expect.objectContaining({
+				name: 'NodeOperationError',
+				message: expect.stringContaining('needs a text date in "at", but it got a number value'),
+			}),
+		);
+	});
+
+	test('timestamp cursor: skips a text date that does not parse and emits the other items', async () => {
+		const { run, staticData, warn } = setup({
+			...idTrigger,
+			cursor: { type: 'timestamp', field: 'at' },
+		});
+
+		expect(await run()).toBeNull(); // seeds with an ISO "now"
+
+		respond([{ at: '0000-00-00 00:00:00' }, { at: '2999-01-01T00:00:00Z' }]);
+		expect(await run()).toMatchObject([[{ json: { at: '2999-01-01T00:00:00Z' } }]]);
+		expect(staticData()[DECLARATIVE_CURSOR_KEY]).toEqual({ value: '2999-01-01T00:00:00Z' });
+		expect(warn).toHaveBeenCalledWith(
+			'Polling trigger "Poll" skipped 1 item(s) with a date in "at" that cannot be read',
+			{ workflowId: 'w1' },
+		);
+		expect(JSON.stringify(warn.mock.calls)).not.toContain('0000-00-00');
 	});
 
 	test('timestamp cursor: skips items with an empty field', async () => {
