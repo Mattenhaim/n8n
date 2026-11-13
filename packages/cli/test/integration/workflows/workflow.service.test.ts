@@ -1831,6 +1831,7 @@ describe('version-scoped settings on save', () => {
 			versionId: workflow.activeVersionId,
 			source: 'ui',
 			publishHistory: 'none',
+			publicApi: false,
 		});
 
 	beforeEach(() => {
