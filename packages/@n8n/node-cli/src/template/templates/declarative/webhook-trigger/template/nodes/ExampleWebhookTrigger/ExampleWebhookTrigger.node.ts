@@ -112,6 +112,7 @@ export class ExampleWebhookTrigger implements INodeType {
 				},
 				// The API sends `{ "type": "ping" }` to test the URL. n8n replies and starts no workflow.
 				// Verification runs first, so the ping must also have a valid signature.
+				// If the API tests the URL while it registers, n8n does not have the secret yet. Use `handshake` for that test.
 				ping: { when: '={{$webhookRequest.body.type === "ping"}}' },
 				// Start the workflow only for the events that the user selected.
 				filter: {

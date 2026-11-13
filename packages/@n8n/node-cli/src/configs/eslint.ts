@@ -45,7 +45,7 @@ function createConfig(supportCloud = true): ConfigArray {
 			extends: [communityNodesRecommended],
 			rules: {
 				...n8nNodesPlugin.configs.community.rules,
-				// Rejects string versions such as "3.1". @n8n/community-nodes/n8n-object-validation checks this field
+				// Rejects string versions such as "3.1". @n8n/community-nodes/n8n-object-validation checks this field.
 				'n8n-nodes-base/community-package-json-n8n-api-version-not-number': 'off',
 			},
 			languageOptions: {
