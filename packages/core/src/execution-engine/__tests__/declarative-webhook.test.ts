@@ -690,6 +690,8 @@ describe('createDeclarativeWebhook', () => {
 			staticData = {},
 			res = mockResponse(),
 			rawBody,
+			unreadBody,
+			contentType,
 			credentials,
 		}: {
 			headers?: IDataObject;
@@ -698,6 +700,9 @@ describe('createDeclarativeWebhook', () => {
 			staticData?: IDataObject;
 			res?: Response;
 			rawBody?: Buffer;
+			/** The body that `readRawBody` reads, for a request that the server did not read. */
+			unreadBody?: Buffer;
+			contentType?: string;
 			credentials?: INodeCredentials;
 		} = {},
 	) {
@@ -722,7 +727,11 @@ describe('createDeclarativeWebhook', () => {
 		});
 		// Set after `mock()`, which would wrap the request data in proxies.
 		const additionalData = mock<IWorkflowExecuteAdditionalData>();
-		additionalData.httpRequest = { body, headers, query, rawBody } as unknown as Request;
+		const request = { body, headers, query, rawBody, contentType } as unknown as Request;
+		request.readRawBody = vi.fn(async () => {
+			request.rawBody = unreadBody ?? request.rawBody;
+		});
+		additionalData.httpRequest = request;
 		additionalData.httpResponse = res;
 		const context = new WebhookContext(
 			workflow,
@@ -1060,12 +1069,16 @@ describe('createDeclarativeWebhook', () => {
 				handler = {},
 				webhookName = 'default',
 				credentials,
+				unreadBody,
+				contentType,
 			}: {
 				raw?: Buffer | null;
 				nodeData?: IDataObject;
 				handler?: IDeclarativeWebhookTrigger['handler'];
 				webhookName?: string;
 				credentials?: INodeCredentials;
+				unreadBody?: Buffer;
+				contentType?: string;
 			} = {},
 		) {
 			const res = mockResponse();
@@ -1076,6 +1089,8 @@ describe('createDeclarativeWebhook', () => {
 				res,
 				webhookName,
 				credentials,
+				unreadBody,
+				contentType,
 			});
 			return { result: await run(), res };
 		}
@@ -1112,6 +1127,35 @@ describe('createDeclarativeWebhook', () => {
 		test('rejects a request without a raw body', async () => {
 			await expectRejected(
 				deliver({}, { 'x-signature': `sha256=${hmac(rawBody)}` }, { raw: null }),
+			);
+		});
+
+		test('reads the raw body when the server did not', async () => {
+			const { result } = await deliver(
+				{},
+				{ 'x-signature': `sha256=${hmac(rawBody)}` },
+				{ raw: null, unreadBody: rawBody, contentType: 'application/vnd.example+json' },
+			);
+
+			expect(result).toEqual(accepted);
+		});
+
+		test('does not read a multipart body', async () => {
+			await expectRejected(
+				deliver(
+					{},
+					{ 'x-signature': `sha256=${hmac(rawBody)}` },
+					{ raw: null, unreadBody: rawBody, contentType: 'multipart/form-data; boundary=x' },
+				),
+			);
+		});
+
+		test('the secret cannot use request data', async () => {
+			await expectRejected(
+				deliver(
+					{ secret: '={{ $webhookRequest.headers["x-key"] }}' },
+					{ 'x-key': 'chosen', 'x-signature': `sha256=${hmac(rawBody, 'chosen')}` },
+				),
 			);
 		});
 

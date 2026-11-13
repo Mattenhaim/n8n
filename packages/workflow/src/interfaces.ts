@@ -3090,11 +3090,10 @@ export interface IDeclarativeWebhookTrigger {
 	handler?: DeclarativeWebhookHandler;
 }
 
-/** A vendor request that confirms the endpoint. It starts no workflow. */
+/** A vendor request that confirms the endpoint. It starts no workflow. Expressions can use `$webhookRequest`, but not `$staticData`. */
 export interface DeclarativeWebhookHandshake {
 	/** On `default`, a truthy result makes the request a handshake. On `setup`, a falsy result replies 401. */
 	when?: string;
-	/** `$staticData` is not available here. */
 	respond?: {
 		/** Default `OK`. */
 		body?: string;
@@ -3122,7 +3121,7 @@ export interface DeclarativeWebhookVerification {
 	encoding?: 'hex' | 'base64';
 	/** The signed text. `{body}` is the raw request body, the other parts can be expressions. Default `{body}`. */
 	signedPayload?: string;
-	/** The header with a Unix timestamp in seconds or milliseconds. A missing or old value fails the check. It prevents replay only if `signedPayload` contains the timestamp. */
+	/** The header with a Unix timestamp in seconds or milliseconds. A missing or old value fails the check. Put the timestamp in `signedPayload`, or the signature does not cover it. */
 	timestampHeader?: string;
 	/** The maximum difference to the current time, in the past or the future. Default 300. */
 	maxTimestampAgeSeconds?: number;

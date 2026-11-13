@@ -395,8 +395,8 @@ async function verifyDelivery(
 			credentialType && context.node.credentials?.[credentialType]
 				? await context.getCredentials(credentialType)
 				: undefined;
+		// No request data: a secret that the request decides would accept any request.
 		secret = resolve(context, config.secret, {
-			...extraKeys,
 			$staticData: context.getWorkflowStaticData('node'),
 			$credentials: credentials,
 		});
@@ -419,6 +419,11 @@ async function verifyDelivery(
 	if (typeof secret !== 'string') return false;
 
 	const { algorithm, prefix = '', timestampHeader } = config;
+	const req = context.getRequestObject();
+	// The server reads the body only for some content types. A multipart body is already consumed.
+	if (algorithm !== 'token' && !req.rawBody && !req.contentType?.startsWith('multipart/')) {
+		await req.readRawBody();
+	}
 	return verifySignature({
 		getExpectedSignature: () => {
 			if (algorithm === 'token') return prefix + secret;
