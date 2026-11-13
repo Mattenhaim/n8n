@@ -3032,7 +3032,7 @@ export type DeclarativeHookMethod = (this: IHookFunctions) => Promise<boolean>;
 export interface DeclarativeWebhookCheckExists {
 	/** The request. Expressions can use `$webhookUrl` and `$staticData`. */
 	routing: INodePropertyRouting;
-	/** The webhook exists if one returned item matches all clauses. Replaces the ID check. */
+	/** The webhook exists if one returned item matches all clauses. Replaces the ID check. Compares single values with `===`, not arrays or objects. */
 	matchOn?: Array<{ itemProperty: string; value: string }>;
 	/** Static data to write from the matched item. Expressions can use `$hook`. */
 	store?: Record<string, string>;
@@ -3069,7 +3069,7 @@ export interface DeclarativeWebhookDelete {
 /** A random value that a declarative webhook trigger makes before it registers. */
 export interface DeclarativeSecretGenerator {
 	type: 'hex' | 'base64' | 'uuid' | 'alphanumericLower';
-	/** Bytes, or characters for `alphanumericLower`. Minimum 1. Default 32 (10 for `alphanumericLower`). */
+	/** Bytes, or characters for `alphanumericLower`. A whole number of 1 or more. Default 32 (10 for `alphanumericLower`). */
 	length?: number;
 	prefix?: string;
 }

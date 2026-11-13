@@ -71,6 +71,7 @@ const context = {
 	node,
 	additionalData: mock<IWorkflowExecuteAdditionalData>(additionalDataFields),
 	mode: 'trigger' as const,
+	getExecutionContext: () => undefined,
 };
 
 const run = async (routing: INodePropertyRouting, extraKeys?: IWorkflowDataProxyAdditionalKeys) =>

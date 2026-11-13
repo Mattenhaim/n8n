@@ -433,19 +433,19 @@ describe('createDeclarativeWebhookMethods', () => {
 			expect(await create()).toBe(true);
 		});
 
-		test('rejects a generate length below 1 without a request', async () => {
+		test.each([0, 1.5])('rejects a generate length of %s without a request', async (length) => {
 			const trigger: IDeclarativeWebhookTrigger = {
 				type: 'webhook',
 				lifecycle: {
 					create: {
 						routing: { request: { method: 'POST', url: '/hooks' } },
-						generate: { secret: { type: 'hex', length: 0 } },
+						generate: { secret: { type: 'hex', length } },
 					},
 				},
 			};
 			const { create } = setup(trigger);
 
-			await expect(create()).rejects.toThrow('must be 1 or more');
+			await expect(create()).rejects.toThrow('must be a whole number of 1 or more');
 			expect(httpRequest).not.toHaveBeenCalled();
 		});
 
@@ -624,6 +624,37 @@ describe('createDeclarativeWebhookMethods', () => {
 			expect(await checkExists()).toBe(false);
 			expect(await del()).toBe(true);
 			expect(httpRequest).not.toHaveBeenCalled();
+		});
+
+		test('an omitted checkExists calls a function delete before it registers again', async () => {
+			const del = vi.fn(async () => true);
+			const trigger: IDeclarativeWebhookTrigger = {
+				type: 'webhook',
+				lifecycle: { create: registryTrigger.lifecycle.create, delete: del },
+			};
+			const { checkExists } = setup(trigger);
+
+			expect(await checkExists()).toBe(false);
+			expect(del).toHaveBeenCalledTimes(1);
+		});
+
+		test('a failed registration calls a function delete', async () => {
+			const del = vi.fn(async () => true);
+			const trigger: IDeclarativeWebhookTrigger = {
+				type: 'webhook',
+				lifecycle: {
+					create: {
+						routing: { request: { method: 'POST', url: '/hooks' } },
+						store: { webhookId: '={{ $response.id }}' },
+					},
+					delete: del,
+				},
+			};
+			const { create } = setup(trigger);
+			respond({});
+
+			await expect(create()).rejects.toThrow('does not contain the expected data');
+			expect(del).toHaveBeenCalledTimes(1);
 		});
 
 		test('uses a function method as it is', async () => {

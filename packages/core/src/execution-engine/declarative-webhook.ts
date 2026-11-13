@@ -175,10 +175,13 @@ function createCreate(
 
 		const $generated: Record<string, string> = {};
 		for (const [name, generator] of Object.entries(config.generate ?? {})) {
-			if (generator.length !== undefined && generator.length < 1) {
+			if (
+				generator.length !== undefined &&
+				!(Number.isInteger(generator.length) && generator.length >= 1)
+			) {
 				throw new NodeOperationError(
 					context.getNode(),
-					`The length of the generated value "${name}" must be 1 or more`,
+					`The length of the generated value "${name}" must be a whole number of 1 or more`,
 				);
 			}
 			$generated[name] = generateSecret(generator);
@@ -235,7 +238,8 @@ export function createDeclarativeWebhookMethods(
 	trigger: IDeclarativeWebhookTrigger,
 ): WebhookMethods {
 	const { checkExists, create, delete: del } = trigger.lifecycle;
-	const deleteHook = typeof del === 'object' ? createDelete(nodeType, trigger, del) : undefined;
+	// A function `delete` also removes the old hook before a new registration.
+	const deleteHook = typeof del === 'object' ? createDelete(nodeType, trigger, del) : del;
 	return {
 		checkExists:
 			typeof checkExists === 'object'
@@ -245,7 +249,7 @@ export function createDeclarativeWebhookMethods(
 						return await registerAgain(this, deleteHook);
 					}),
 		create: typeof create === 'object' ? createCreate(nodeType, create, deleteHook) : create,
-		delete: deleteHook ?? (typeof del === 'function' ? del : async () => true),
+		delete: deleteHook ?? (async () => true),
 	};
 }
 
