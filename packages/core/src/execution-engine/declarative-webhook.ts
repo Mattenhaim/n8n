@@ -1,3 +1,4 @@
+import { isRecord } from '@n8n/utils/is-record';
 import { verifySignature } from '@n8n/utils/webhook-signature';
 import get from 'lodash/get';
 import type {
@@ -179,10 +180,13 @@ function createCreate(
 
 		const $generated: Record<string, string> = {};
 		for (const [name, generator] of Object.entries(config.generate ?? {})) {
-			if (generator.length !== undefined && generator.length < 1) {
+			if (
+				generator.length !== undefined &&
+				!(Number.isInteger(generator.length) && generator.length >= 1)
+			) {
 				throw new NodeOperationError(
 					context.getNode(),
-					`The length of the generated value "${name}" must be 1 or more`,
+					`The length of the generated value "${name}" must be a whole number of 1 or more`,
 				);
 			}
 			$generated[name] = generateSecret(generator);
@@ -239,7 +243,8 @@ export function createDeclarativeWebhookMethods(
 	trigger: IDeclarativeWebhookTrigger,
 ): WebhookMethods {
 	const { checkExists, create, delete: del } = trigger.lifecycle;
-	const deleteHook = typeof del === 'object' ? createDelete(nodeType, trigger, del) : undefined;
+	// A function `delete` also removes the old hook before a new registration.
+	const deleteHook = typeof del === 'object' ? createDelete(nodeType, trigger, del) : del;
 	return {
 		checkExists:
 			typeof checkExists === 'object'
@@ -249,7 +254,7 @@ export function createDeclarativeWebhookMethods(
 						return await registerAgain(this, deleteHook);
 					}),
 		create: typeof create === 'object' ? createCreate(nodeType, create, deleteHook) : create,
-		delete: deleteHook ?? (typeof del === 'function' ? del : async () => true),
+		delete: deleteHook ?? (async () => true),
 	};
 }
 
@@ -329,10 +334,14 @@ function respondToHandshake(
 		}
 		res.setHeader(name, text);
 	}
-	if (contentType) res.setHeader('content-type', contentType);
 	const resolved = body === undefined ? 'OK' : resolve(context, body, extraKeys);
 	// With `undefined`, the server would send its default message.
 	const value = resolved === undefined ? '' : resolved;
+	// A string reply would go out as HTML. Send it as plain text, as the hand-written triggers do.
+	const type =
+		contentType ??
+		(typeof value === 'string' && !res.getHeader('content-type') ? 'text/plain' : undefined);
+	if (type) res.setHeader('content-type', type);
 	if (statusCode === 200) return { webhookResponse: value };
 
 	// The server sets the status of the route, so another status needs a direct reply.
@@ -386,8 +395,8 @@ async function verifyDelivery(
 			credentialType && context.node.credentials?.[credentialType]
 				? await context.getCredentials(credentialType)
 				: undefined;
+		// No request data: a secret that the request decides would accept any request.
 		secret = resolve(context, config.secret, {
-			...extraKeys,
 			$staticData: context.getWorkflowStaticData('node'),
 			$credentials: credentials,
 		});
@@ -410,6 +419,11 @@ async function verifyDelivery(
 	if (typeof secret !== 'string') return false;
 
 	const { algorithm, prefix = '', timestampHeader } = config;
+	const req = context.getRequestObject();
+	// The server reads the body only for some content types. A multipart body is already consumed.
+	if (algorithm !== 'token' && !req.rawBody && !req.contentType?.startsWith('multipart/')) {
+		await req.readRawBody();
+	}
 	return verifySignature({
 		getExpectedSignature: () => {
 			if (algorithm === 'token') return prefix + secret;
@@ -480,6 +494,8 @@ export function createDeclarativeWebhook(trigger: IDeclarativeWebhookTrigger) {
 			// The spread keeps binary data that a postReceive action attached.
 			items = items.map((item) => ({ ...item, json: { body: item.json, headers, query } }));
 		}
+		// An item must hold an object. A text body or a missing `rootProperty` gives other values.
+		items = items.filter((item) => isRecord(item.json));
 		// An empty result starts no workflow, the same as a filter miss.
 		if (items.length === 0) return {};
 		return { workflowData: [items] };
